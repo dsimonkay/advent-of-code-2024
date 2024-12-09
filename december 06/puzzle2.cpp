@@ -21,13 +21,13 @@ bool IsWithinMap(const int row, const int col, const int max_row, const int max_
 }
 
 bool ContainsLoop(const std::vector<std::vector<char>>& map,
-                  const int obstruction_row,
-                  const int obstruction_col,
                   const int starting_row,
                   const int starting_col,
                   const int starting_direction,
                   const int max_row,
-                  const int max_col)
+                  const int max_col,
+                  const int obstruction_row,
+                  const int obstruction_col)
 {
     // The tuple encodes the <row, col, direction> of a step of the guard's path 
     std::set<std::tuple<int, int, int>> path{};
@@ -71,6 +71,51 @@ bool ContainsLoop(const std::vector<std::vector<char>>& map,
     return loop_found;
 }
 
+std::set<std::pair<int, int>> GetMapLeavingPathFrom(const std::vector<std::vector<char>>& map,
+                                          const int starting_row,
+                                          const int starting_col,
+                                          const int starting_direction,
+                                          const int max_row,
+                                          const int max_col)
+{
+    // Note: invoke this function with caution, as it does not check for infinite loops.
+    // It also assumes that from the given starting position there _is_ a way out of the map.
+    std::set<std::pair<int, int>> path{};
+
+    int row{starting_row};
+    int col{starting_col};
+    int direction{starting_direction};
+
+    while (true)
+    {
+        // To be honest, this is wrong. We should not be able to put an obstruction to the starting positon of the guard. :(
+        const auto result = path.insert({row, col});
+
+        // Lookahead: one step in the given direction
+        const int new_row = row + moves[direction].first;
+        const int new_col = col + moves[direction].second;
+
+        if (!IsWithinMap(new_row, new_col, max_row, max_col))
+        {
+            // Leaving the map; that was it
+            break;
+        }
+
+        if (map[new_row][new_col] == '#')
+        {
+            direction = (direction + 1) % 4;   // Turn right
+        }
+        else
+        {
+            row = new_row;
+            col = new_col;
+        }
+    }
+
+    return path;
+
+}
+
 int GetNumberOfPossibleObstructions(const std::vector<std::vector<char>>& map,
                                     const int starting_row,
                                     const int starting_col,
@@ -87,23 +132,23 @@ int GetNumberOfPossibleObstructions(const std::vector<std::vector<char>>& map,
 
     int nr_of_possible_obstructions = 0;
 
-    // Put an extra obstruction at each available position in the map and check whether it contains then a loop.
-    // TODO: get the original path and only put obstacles along it.
-    for (int i{0}; i <= max_row; ++i)
+    // Put an extra obstruction at each position of the original path and check whether it contains then a loop.
+    const auto path{GetMapLeavingPathFrom(map, starting_row, starting_col, starting_direction, max_row, max_col)};
+    std::cout << "Nr. of possible obstructions: " << path.size() << "\n";
+    for (const auto& original_path_positon : path)
     {
-        std::cout << "Checking loops in row " << i << "...\n";
-        for (int j{0}; j <= max_col; ++j)
+        static int i{1};
+        std::cout << "[" << i++ << " / " << path.size() << "] Putting obstruction on position (" << original_path_positon.first << ", " << original_path_positon.second << ").\n";
+        if (ContainsLoop(map,
+                         starting_row,
+                         starting_col,
+                         starting_direction,
+                         max_row,
+                         max_col,
+                         original_path_positon.first,
+                         original_path_positon.second))
         {
-            if (((i == starting_row) && (j == starting_col)) || map[i][j] == '#')
-            {
-                // Don't put an obstacle on the starting position or over existing obstructions
-                continue;
-            }
-
-            if (ContainsLoop(map, i, j, starting_row, starting_col, starting_direction, max_row, max_col))
-            {
-                nr_of_possible_obstructions++;
-            }
+            nr_of_possible_obstructions++;
         }
     }
 
